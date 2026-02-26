@@ -51,7 +51,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [wakeWordEnabled, setWakeWordEnabled] = useState(false);
   const [panelRatio, setPanelRatioState] = useState(() => {
     const saved = localStorage.getItem('oc-panel-ratio');
-    return saved ? Number(saved) : 55;
+    return saved ? Number(saved) : 75;
   });
   const [telemetryVisible, setTelemetryVisible] = useState(() => {
     const saved = localStorage.getItem('oc-telemetry-visible');
