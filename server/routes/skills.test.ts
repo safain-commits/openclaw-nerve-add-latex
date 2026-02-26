@@ -2,7 +2,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Hono } from 'hono';
 
-// Use vi.mock (hoisted) for native modules — vi.doMock doesn't reliably work for them
 let execFileImpl: (...args: unknown[]) => void;
 
 vi.mock(import('node:child_process'), async (importOriginal) => {

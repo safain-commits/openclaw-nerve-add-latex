@@ -1,6 +1,4 @@
-/**
- * Tests for extractImages — image extraction from markdown text.
- */
+/** Tests for extractImages. */
 import { describe, it, expect } from 'vitest';
 import { extractImages } from './extractImages';
 

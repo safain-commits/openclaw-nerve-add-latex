@@ -1,6 +1,4 @@
-/**
- * Tests for loadHistory — message filtering, splitting, grouping, tagging, and the full pipeline.
- */
+/** Tests for loadHistory — filtering, splitting, grouping, and tagging. */
 import { describe, it, expect, vi } from 'vitest';
 import {
   filterMessage,

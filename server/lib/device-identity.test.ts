@@ -1,16 +1,10 @@
-/**
- * Tests for server/lib/device-identity.ts
- *
- * Tests Ed25519 keypair generation, signature creation/verification,
- * signing payload format, and identity persistence.
- */
+/** Tests for device-identity — Ed25519 keypair, signing, and persistence. */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
-// We'll dynamically import the module to control caching behavior
 let getDeviceIdentity: typeof import('./device-identity.js').getDeviceIdentity;
 let buildSigningPayload: typeof import('./device-identity.js').buildSigningPayload;
 let signPayload: typeof import('./device-identity.js').signPayload;
@@ -21,11 +15,9 @@ describe('device-identity', () => {
   const originalEnv = { ...process.env };
 
   beforeEach(async () => {
-    // Create a temp dir for identity files
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nerve-test-identity-'));
     process.env.NERVE_DATA_DIR = tmpDir;
 
-    // Reset module cache so each test gets a fresh identity
     vi.resetModules();
     const mod = await import('./device-identity.js');
     getDeviceIdentity = mod.getDeviceIdentity;
@@ -36,7 +28,6 @@ describe('device-identity', () => {
 
   afterEach(() => {
     process.env = { ...originalEnv };
-    // Clean up temp dir
     try {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     } catch { /* ignore */ }
@@ -50,10 +41,10 @@ describe('device-identity', () => {
       expect(identity).toBeDefined();
       expect(identity.deviceId).toBeTruthy();
       expect(typeof identity.deviceId).toBe('string');
-      expect(identity.deviceId).toHaveLength(64); // SHA-256 hex
+      expect(identity.deviceId).toHaveLength(64);
       expect(identity.publicKeyB64url).toBeTruthy();
       expect(identity.publicKeyRaw).toBeInstanceOf(Buffer);
-      expect(identity.publicKeyRaw.length).toBe(32); // Ed25519 raw public key
+      expect(identity.publicKeyRaw.length).toBe(32);
       expect(identity.privateKeyPem).toContain('PRIVATE KEY');
 
       logSpy.mockRestore();
@@ -85,12 +76,11 @@ describe('device-identity', () => {
       logSpy.mockRestore();
     });
 
-    it('loads existing identity from file on fresh import', async () => {
+    it('loads existing identity from file after module reset', async () => {
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
       const first = getDeviceIdentity();
       logSpy.mockRestore();
 
-      // Reset module to simulate fresh process
       vi.resetModules();
       process.env.NERVE_DATA_DIR = tmpDir;
       const freshMod = await import('./device-identity.js');
@@ -105,7 +95,6 @@ describe('device-identity', () => {
     });
 
     it('regenerates identity when file is corrupted', async () => {
-      // Write a corrupted file
       const idPath = path.join(tmpDir, 'device-identity.json');
       fs.writeFileSync(idPath, '{{invalid json', 'utf-8');
 
@@ -128,7 +117,6 @@ describe('device-identity', () => {
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
       const identity = getDeviceIdentity();
 
-      // Should have generated a new one, not "partial"
       expect(identity.deviceId).toHaveLength(64);
       expect(identity.publicKeyB64url).toBeTruthy();
       expect(identity.privateKeyPem).toContain('PRIVATE KEY');
@@ -236,7 +224,6 @@ describe('device-identity', () => {
 
       expect(typeof sig).toBe('string');
       expect(sig.length).toBeGreaterThan(0);
-      // base64url should not contain + / =
       expect(sig).not.toMatch(/[+/=]/);
     });
 
@@ -249,9 +236,7 @@ describe('device-identity', () => {
       const sig = signPayload(identity.privateKeyPem, payload);
       const sigBuf = Buffer.from(sig, 'base64url');
 
-      // Reconstruct public key from raw bytes
       const pubKeyDer = Buffer.concat([
-        // Ed25519 SPKI header (12 bytes)
         Buffer.from('302a300506032b6570032100', 'hex'),
         identity.publicKeyRaw,
       ]);
@@ -286,7 +271,7 @@ describe('device-identity', () => {
       logSpy.mockRestore();
 
       expect(block.id).toBeTruthy();
-      expect(block.id).toHaveLength(64); // device ID
+      expect(block.id).toHaveLength(64);
       expect(block.publicKey).toBeTruthy();
       expect(typeof block.signature).toBe('string');
       expect(block.signature.length).toBeGreaterThan(0);
@@ -310,7 +295,6 @@ describe('device-identity', () => {
 
       const block = createDeviceBlock(params);
 
-      // Reconstruct the expected signing payload
       const expectedPayload = buildSigningPayload({
         deviceId: identity.deviceId,
         clientId: params.clientId,
@@ -322,7 +306,6 @@ describe('device-identity', () => {
         nonce: params.nonce,
       });
 
-      // Verify signature
       const sigBuf = Buffer.from(block.signature, 'base64url');
       const pubKeyDer = Buffer.concat([
         Buffer.from('302a300506032b6570032100', 'hex'),
@@ -350,7 +333,6 @@ describe('device-identity', () => {
 
       expect(block1.id).toBe(block2.id);
       expect(block1.publicKey).toBe(block2.publicKey);
-      // Different nonces produce different signatures
       expect(block1.signature).not.toBe(block2.signature);
     });
   });

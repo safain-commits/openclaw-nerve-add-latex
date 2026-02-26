@@ -1,6 +1,4 @@
-/** Tests for the transcribe config and language routes. 
- *  POST /api/transcribe requires multipart file upload which is complex in jsdom,
- *  so we focus on the config/language endpoints and basic validation. */
+/** Tests for the transcribe config and language routes. */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Hono } from 'hono';
 

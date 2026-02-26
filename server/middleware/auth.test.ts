@@ -1,9 +1,4 @@
-/**
- * Tests for the auth middleware.
- *
- * We test the middleware by constructing a minimal Hono app, mounting
- * the authMiddleware, and sending requests against it.
- */
+/** Tests for the auth middleware. */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Hono } from 'hono';
 

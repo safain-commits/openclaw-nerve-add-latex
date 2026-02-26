@@ -1,6 +1,4 @@
-/**
- * Tests for mergeRecoveredTail — merging recovered history with existing transcript.
- */
+/** Tests for mergeRecoveredTail. */
 import { describe, it, expect } from 'vitest';
 import { mergeRecoveredTail } from './mergeRecoveredTail';
 import type { ChatMsg } from '@/features/chat/types';

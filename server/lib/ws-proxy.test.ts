@@ -1,9 +1,4 @@
-/**
- * Tests for server/lib/ws-proxy.ts
- *
- * Tests WebSocket proxy setup, message relaying, auth enforcement,
- * and connection lifecycle using a mock gateway and real HTTP+WS servers.
- */
+/** Tests for ws-proxy — connection, relaying, auth, and lifecycle. */
 import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
 import { WebSocket } from 'ws';
 import { createServer, type Server } from 'node:http';

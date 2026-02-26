@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useWebSocket } from './useWebSocket';
 
-// Mock WebSocket for testing
 class MockWebSocket {
   static CONNECTING = 0;
   static OPEN = 1;
@@ -20,7 +19,6 @@ class MockWebSocket {
   
   constructor(url: string) {
     this.url = url;
-    // Async connection
     setTimeout(() => {
       this.readyState = MockWebSocket.OPEN;
       this.onopen?.(new Event('open'));
@@ -264,7 +262,6 @@ describe('useWebSocket', () => {
         await vi.runAllTimersAsync();
       });
 
-      // Should show reconnecting state
       expect(result.current.connectionState).toBe('reconnecting');
       expect(result.current.reconnectAttempt).toBeGreaterThan(0);
     });
@@ -305,7 +302,6 @@ describe('useWebSocket', () => {
         await vi.advanceTimersByTimeAsync(5000);
       });
 
-      // Should NOT create new WebSocket
       expect(wsInstances.length).toBe(initialCount);
       expect(result.current.connectionState).toBe('disconnected');
       expect(result.current.reconnectAttempt).toBe(0);
@@ -314,17 +310,14 @@ describe('useWebSocket', () => {
     it('should manage reconnect counter', async () => {
       const { result } = renderHook(() => useWebSocket());
       
-      // Start with 0 reconnect attempts
       expect(result.current.reconnectAttempt).toBe(0);
       
-      // After connect, still 0
       act(() => {
         result.current.connect('ws://localhost:8080', 'test-token');
       });
 
       expect(result.current.reconnectAttempt).toBe(0);
       
-      // After disconnect, should reset to 0
       act(() => {
         result.current.disconnect();
       });
@@ -341,7 +334,6 @@ describe('useWebSocket', () => {
         constructor(url: string) {
           super(url);
           wsInstances.push(this);
-          // Start connected for RPC testing
           this.readyState = MockWebSocket.OPEN;
         }
       };
@@ -356,7 +348,6 @@ describe('useWebSocket', () => {
         await vi.runAllTimersAsync();
       });
 
-      // Make RPC call that never gets a response
       let rpcError: Error | null = null;
       act(() => {
         result.current.rpc('test.method', { foo: 'bar' }).catch((e: unknown) => {
@@ -364,7 +355,6 @@ describe('useWebSocket', () => {
         });
       });
 
-      // Advance time by 30+ seconds
       await act(async () => {
         await vi.advanceTimersByTimeAsync(31000);
       });
@@ -410,22 +400,17 @@ describe('useWebSocket', () => {
         await vi.runAllTimersAsync();
       });
 
-      // Make RPC call with params (catch to prevent unhandled rejection)
       act(() => {
-        result.current.rpc('test.method', { foo: 'bar', num: 42 }).catch(() => {
-          // Expected - no response will be sent in this test
-        });
+        result.current.rpc('test.method', { foo: 'bar', num: 42 }).catch(() => {});
       });
 
       await act(async () => {
         await vi.runAllTimersAsync();
       });
 
-      // Verify message was sent with correct structure
       const ws = wsInstances[0];
       expect(ws.sentMessages.length).toBeGreaterThan(0);
       
-      // Find the RPC message (skip auth messages)
       const rpcMsg = ws.sentMessages.find(msg => {
         const parsed = JSON.parse(msg);
         return parsed.method === 'test.method';
@@ -454,7 +439,6 @@ describe('useWebSocket', () => {
     it('should handle connection errors gracefully', async () => {
       const { result } = renderHook(() => useWebSocket());
       
-      // Connecting should not throw
       expect(() => {
         act(() => {
           result.current.connect('ws://localhost:8080', 'test-token');

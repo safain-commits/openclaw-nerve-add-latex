@@ -2,8 +2,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Hono } from 'hono';
 
-// ── Hoisted mocks for native + shared modules ──────────────────────
-
 let execFileImpl: (...args: unknown[]) => void;
 let invokeGatewayImpl: (tool: string, args: Record<string, unknown>) => unknown;
 
@@ -53,7 +51,6 @@ describe('gateway routes', () => {
     vi.restoreAllMocks();
   });
 
-  // Default impls
   function setDefaults() {
     execFileImpl = (_bin: unknown, _args: unknown, _opts: unknown, cb: unknown) => {
       (cb as (err: null, stdout: string) => void)(null, GOOD_MODELS);
@@ -69,7 +66,6 @@ describe('gateway routes', () => {
       expect(res.status).toBe(200);
       const json = (await res.json()) as { models: Array<{ id: string; label: string; provider: string }> };
       expect(json.models.length).toBeGreaterThanOrEqual(1);
-      // Models are sorted by id
       for (const m of json.models) {
         expect(m).toHaveProperty('id');
         expect(m).toHaveProperty('label');
@@ -83,9 +79,7 @@ describe('gateway routes', () => {
       };
       invokeGatewayImpl = () => ({});
 
-      // Need fresh import to reset the model cache
       vi.resetModules();
-      // Re-mock with same fns
       vi.doMock('node:child_process', () => ({
         execFile: (...args: unknown[]) => execFileImpl(...args),
       }));

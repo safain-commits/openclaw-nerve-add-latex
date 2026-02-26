@@ -8,8 +8,8 @@
 | Metric | Baseline | Current | Change |
 |--------|----------|---------|--------|
 | Test Files | — | 48 | — |
-| Total Tests | 283 | 688 | +405 (+143%) |
-| Passing | — | 688 | 100% |
+| Total Tests | 283 | 686 | +403 (+142%) |
+| Passing | — | 686 | 100% |
 | Failing | — | 0 | — |
 | Skipped | — | 0 | — |
 | Flaky | — | 0 | — |

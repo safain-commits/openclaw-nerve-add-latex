@@ -1,18 +1,10 @@
-/**
- * Tests for server/lib/config.ts
- *
- * Since `config` is evaluated at module-load time from process.env, we test
- * the exported values, the helper functions, and validate behavior by
- * dynamically importing the module with controlled env vars.
- */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+/** Tests for server/lib/config.ts — env-driven config, helpers, and banner. */
+import { describe, it, expect, vi, afterEach } from 'vitest';
 
 describe('config module', () => {
-  // Save original env
   const originalEnv = { ...process.env };
 
   afterEach(() => {
-    // Restore env
     process.env = { ...originalEnv };
     vi.restoreAllMocks();
   });
@@ -36,20 +28,17 @@ describe('config module', () => {
 
     it('has sensible defaults for port', async () => {
       const { config } = await import('./config.js');
-      // DEFAULT_PORT is 3080
       expect(config.port).toBeGreaterThan(0);
       expect(config.port).toBeLessThan(65536);
     });
 
     it('has a default host of 127.0.0.1', async () => {
       const { config } = await import('./config.js');
-      // When HOST is not set, defaults to 127.0.0.1
       expect(['127.0.0.1', 'localhost', '::1', '0.0.0.0']).toContain(config.host);
     });
 
     it('defaults auth to false', async () => {
       const { config } = await import('./config.js');
-      // Unless NERVE_AUTH is explicitly "true"
       if (!process.env.NERVE_AUTH || process.env.NERVE_AUTH !== 'true') {
         expect(config.auth).toBe(false);
       }
@@ -57,7 +46,6 @@ describe('config module', () => {
 
     it('defaults language to en', async () => {
       const { config } = await import('./config.js');
-      // Default should be 'en' unless NERVE_LANGUAGE is set
       expect(typeof config.language).toBe('string');
       expect(config.language.length).toBeGreaterThan(0);
     });
@@ -88,12 +76,12 @@ describe('config module', () => {
   describe('limits', () => {
     it('has reasonable TTS limit', async () => {
       const { config } = await import('./config.js');
-      expect(config.limits.tts).toBe(64 * 1024); // 64KB
+      expect(config.limits.tts).toBe(64 * 1024);
     });
 
     it('has reasonable transcribe limit', async () => {
       const { config } = await import('./config.js');
-      expect(config.limits.transcribe).toBe(12 * 1024 * 1024); // 12MB
+      expect(config.limits.transcribe).toBe(12 * 1024 * 1024);
     });
 
     it('maxBodyBytes is larger than transcribe', async () => {
@@ -103,14 +91,8 @@ describe('config module', () => {
   });
 
   describe('validateConfig', () => {
-    it('is a callable function', async () => {
-      const { validateConfig } = await import('./config.js');
-      expect(typeof validateConfig).toBe('function');
-    });
-
     it('does not throw when called', async () => {
       const { validateConfig } = await import('./config.js');
-      // Suppress console output during validation
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       expect(() => validateConfig()).not.toThrow();
@@ -125,7 +107,6 @@ describe('config module', () => {
       delete process.env.OPENCLAW_GATEWAY_TOKEN;
 
       const { validateConfig, config: cfg } = await import('./config.js');
-      // Only warns if the config's gatewayToken is actually empty
       if (!cfg.gatewayToken) {
         const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
         const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -157,16 +138,10 @@ describe('config module', () => {
   });
 
   describe('probeGateway', () => {
-    it('is an async function', async () => {
-      const { probeGateway } = await import('./config.js');
-      expect(typeof probeGateway).toBe('function');
-    });
-
     it('does not throw when gateway is unreachable', async () => {
       const { probeGateway } = await import('./config.js');
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-      // Should not throw even if gateway is down
       await expect(probeGateway()).resolves.toBeUndefined();
       warnSpy.mockRestore();
       logSpy.mockRestore();
