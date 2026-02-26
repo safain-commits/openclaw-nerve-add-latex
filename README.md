@@ -130,6 +130,7 @@ See [Security](docs/SECURITY.md) for the full threat model.
 | **[API](docs/API.md)** | REST and WebSocket endpoints |
 | **[Contributing](CONTRIBUTING.md)** | Dev setup, code style, PRs |
 | **[Troubleshooting](docs/TROUBLESHOOTING.md)** | Common issues and fixes |
+| **[Changelog](CHANGELOG.md)** | Release notes and shipped changes |
 
 ## Community
 
