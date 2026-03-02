@@ -1,33 +1,30 @@
-# Deployment Guide A: Gateway local + Nerve local
+# Deployment: Local (Same Machine)
 
-This guide covers the default setup where OpenClaw Gateway and Nerve run on the same machine.
+Gateway and Nerve on the same host. This is the default setup and has the fewest moving parts.
 
 ## Topology
 
 ```
-Browser (localhost) -> Nerve (127.0.0.1:3080) -> Gateway (127.0.0.1:18789)
+Browser (localhost) → Nerve (127.0.0.1:3080) → Gateway (127.0.0.1:18789)
 ```
-
-Both services stay local. This is the most stable and lowest friction deployment.
 
 ## Prerequisites
 
 - Node.js 22+
-- OpenClaw installed
-- OpenClaw gateway installed and running
-- Local shell access to the machine
+- OpenClaw installed and gateway running
+- Local shell access
 
-## Step by step setup
+## Setup
 
-### 1) Install Nerve
+### 1. Install Nerve
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/daggerhashimoto/openclaw-nerve/master/install.sh | bash
 ```
 
-### 2) Run setup if needed
+### 2. Run setup if needed
 
-If `.env` is missing or wrong, run:
+If `.env` is missing or wrong:
 
 ```bash
 cd ~/nerve
@@ -35,23 +32,20 @@ npm run setup
 ```
 
 Recommended choices:
+- Access mode: **This machine only (localhost)**
+- Authentication: optional for localhost-only usage
 
-- Access mode: `This machine only (localhost)`
-- Authentication: optional for localhost only usage
-
-### 3) Start or restart Nerve
+### 3. Start or restart
 
 ```bash
-# if running as systemd service
+# systemd service
 sudo systemctl restart nerve.service
 
 # or run directly
 npm run prod
 ```
 
-## Validation checklist
-
-Run these commands on the same machine:
+## Validation
 
 ```bash
 openclaw gateway status
@@ -59,59 +53,37 @@ curl -sS http://127.0.0.1:18789/health
 curl -sS http://127.0.0.1:3080/health
 ```
 
-Expected result:
+All three should succeed. Open `http://localhost:3080` in your browser.
 
-- Gateway is running
-- Both health endpoints return success
-- Browser can connect without manual network setup
+## Common issues
 
-## Known frictions and current gaps
+### Token mismatch after OpenClaw updates
 
-### 1) Token mismatch after OpenClaw updates
+After an OpenClaw update or re-onboard, the connect dialog may fail with auth errors.
 
-Symptom:
+**Fix:** Re-run `npm run setup`, restart both services, and open a fresh browser tab.
 
-- Connect dialog suddenly fails with auth errors after update or re-onboard
+### Missing scopes after first connect
 
-Current workaround:
+Chat connects but actions fail with "missing scope" errors.
 
-- Re-run `npm run setup`
-- Restart gateway and Nerve
-- Open a fresh browser tab
-
-### 2) Missing scopes after first connect
-
-Symptom:
-
-- Chat connects but actions fail with missing scope errors
-
-Current workaround:
-
-- Re-run `npm run setup`
-- Check pending devices and approve if required:
+**Fix:** Re-run `npm run setup`, or manually approve the device:
 
 ```bash
 openclaw devices list
 openclaw devices approve <requestId>
 ```
 
-### 3) Browser keeps old credentials
+### Browser keeps old credentials
 
-Symptom:
-
-- Valid token fails until browser state is reset
-
-Current workaround:
-
-- Open a new tab or private window
-- Clear saved Nerve connection state in the browser
+**Fix:** Open a new tab or private window. Nerve stores the gateway token in `sessionStorage`, which clears when the tab closes.
 
 ## Security notes
 
 - Keep `HOST=127.0.0.1` for local-only deployments
-- Do not expose Nerve or Gateway to network unless you need remote access
 - If you expose Nerve (`HOST=0.0.0.0`), enable `NERVE_AUTH=true`
+- See [Security](SECURITY.md) for the full threat model
 
-## Operational recommendation
+## Recommendation
 
-If you are choosing a first deployment, choose this scenario first. It has the fewest moving parts and the best current support in setup and docs.
+If you're choosing your first deployment, start here. It has the fewest moving parts and the best support.

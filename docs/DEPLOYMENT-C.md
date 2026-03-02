@@ -1,29 +1,22 @@
-# Deployment Guide C: Nerve cloud + Gateway cloud
+# Deployment: Cloud (Remote Access)
 
-This guide covers hosted deployments where users access Nerve remotely.
-
-## Who should use this
-
-Use this when:
-
-- You want to access Nerve from multiple devices
-- You want one always-on deployment
+Both Nerve and Gateway hosted remotely. Access from any device, anywhere.
 
 ## Topology options
 
-### C1) Same host (recommended)
+### Same host (recommended)
 
 ```
-Browser remote -> Nerve cloud -> Gateway cloud (same machine)
+Browser (remote) → Nerve cloud → Gateway cloud (same machine)
 ```
 
-### C2) Split hosts
+### Split hosts
 
 ```
-Browser remote -> Nerve cloud host A -> Gateway cloud host B
+Browser (remote) → Nerve (host A) → Gateway (host B)
 ```
 
-C1 is simpler and has fewer failure points.
+Same-host is simpler and has fewer failure points. Use split hosts only if you have a specific reason.
 
 ## Prerequisites
 
@@ -32,15 +25,15 @@ C1 is simpler and has fewer failure points.
 - Domain or stable IP for Nerve
 - TLS termination plan (reverse proxy or direct certs)
 
-## C1 setup (same host)
+## Same-host setup
 
-### 1) Install Nerve on cloud host
+### 1. Install Nerve
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/daggerhashimoto/openclaw-nerve/master/install.sh | bash
 ```
 
-### 2) Run setup and choose network access
+### 2. Run setup with network access
 
 ```bash
 cd ~/nerve
@@ -48,45 +41,55 @@ npm run setup
 ```
 
 Recommended choices:
-
-- Access mode: network or custom
+- Access mode: **Network** or **Custom**
 - `HOST=0.0.0.0`
-- Enable authentication and set password
+- **Enable authentication** and set a password
 - Enable HTTPS if serving directly
 
-### 3) Start service
+### 3. Start the service
 
 ```bash
 sudo systemctl restart nerve.service
 sudo systemctl status nerve.service
 ```
 
-### 4) Put Nerve behind TLS reverse proxy
+### 4. Set up TLS
 
-Use Nginx, Caddy, or Traefik. Forward HTTP and WebSocket traffic to Nerve.
+Put Nerve behind a reverse proxy (Nginx, Caddy, or Traefik) that handles HTTPS and forwards HTTP + WebSocket traffic to Nerve.
 
-## C2 setup (split hosts)
+Or generate certs directly:
 
-Follow C1 for Nerve host, then add these extra steps:
+```bash
+mkdir -p certs
+openssl req -x509 -newkey rsa:2048 -nodes \
+  -keyout certs/key.pem -out certs/cert.pem -days 365 \
+  -subj "/CN=your-domain.com"
+```
 
-### 1) Point Nerve to remote gateway
+Nerve auto-detects certificates at `certs/cert.pem` and `certs/key.pem`.
 
-In Nerve `.env`:
+## Split-host setup
+
+Follow the same-host steps for Nerve, then add:
+
+### Point Nerve to remote gateway
+
+In `.env`:
 
 ```env
 GATEWAY_URL=<remote-gateway-url>
 WS_ALLOWED_HOSTS=<remote-gateway-hostname-or-ip>
 ```
 
-### 2) Patch remote gateway allowed origins
+### Patch remote gateway allowed origins
 
-On gateway host, add Nerve public origin to `gateway.controlUi.allowedOrigins`.
+On the gateway host, add Nerve's public origin to `gateway.controlUi.allowedOrigins`:
 
-Example origin:
+```
+https://nerve.example.com
+```
 
-- `https://nerve.example.com`
-
-### 3) Ensure remote gateway tools allowlist includes required entries
+### Ensure gateway tools allowlist
 
 ```json
 "gateway": {
@@ -96,87 +99,39 @@ Example origin:
 }
 ```
 
-### 4) Restart both services
+Restart both services.
 
-- Restart Gateway on host B
-- Restart Nerve on host A
-
-## Validation checklist
-
-### Nerve host
+## Validation
 
 ```bash
+# Nerve host
 curl -sS http://127.0.0.1:3080/health
-```
 
-### Public endpoint
-
-```bash
+# Public endpoint
 curl -sS https://<nerve-domain>/health
 ```
 
-### Browser tests
+In the browser: login screen appears, connect succeeds, sessions load, messages work.
 
-- Login screen appears when auth enabled
-- Connect to gateway succeeds
-- Session list loads
-- Send message and receive response
-- File browser and workspace actions succeed
+## Common issues
 
-## Known frictions and current gaps
+### Remote clients don't get auto token prefill
 
-### 1) Remote clients do not get auto token prefill
+`/api/connect-defaults` only returns the token to loopback clients. Remote users must enter the gateway token manually in the connect dialog.
 
-Impact:
+### Reverse proxy and trusted proxy settings
 
-- `/api/connect-defaults` does not return token to non-loopback clients
-- Users need gateway token in Connect dialog
+Wrong IP detection affects rate limiting and logs.
 
-Current workaround:
-
-- Provide token to operators out of band
-- Keep user count limited to trusted operators
-
-### 2) Multi-user credential model is rough
-
-Impact:
-
-- Gateway token handling is user-facing in hosted mode
-- Hard to delegate access cleanly
-
-Current workaround:
-
-- Treat deployment as single-operator or small trusted group
-
-### 3) Reverse proxy and trusted proxy settings can drift
-
-Impact:
-
-- Wrong IP detection for rate limiting or logs
-
-Current workaround:
-
-- Set `TRUSTED_PROXIES` to your reverse proxy addresses
-- Re-test after infrastructure changes
-
-### 4) Split-host deployments inherit scenario B manual steps
-
-Impact:
-
-- More config points to keep in sync
-
-Current workaround:
-
-- Use same-host C1 if possible
+**Fix:** Set `TRUSTED_PROXIES` in `.env` to your reverse proxy addresses.
 
 ## Security notes
 
-- Always enable `NERVE_AUTH=true` for public or shared access
-- Use HTTPS end to end or at least at the edge
-- Restrict gateway network exposure to trusted paths only
-- Keep gateway on loopback when Nerve and Gateway share host
-- Rotate gateway token on ownership or access changes
+- **Always** enable `NERVE_AUTH=true` for remote access
+- Use HTTPS end-to-end or at least at the edge
+- Keep the gateway on loopback when Nerve and Gateway share a host
+- Rotate gateway token on access changes
 
-## Operational recommendation
+## Recommendation
 
-Choose C1 unless you have a hard requirement for split hosts. C1 is easier to secure and easier to support.
+Choose same-host unless you have a hard requirement for split hosts. It's easier to secure and support.
