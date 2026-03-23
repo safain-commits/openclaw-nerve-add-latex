@@ -32,6 +32,7 @@ export interface DashboardDataState {
   memories: Memory[];
   memoriesLoading: boolean;
   tokenData: TokenData | null;
+  remoteWorkspace: boolean;
   refreshMemories: (signal?: AbortSignal) => Promise<void>;
   refreshTokens: (signal?: AbortSignal) => Promise<void>;
 }
@@ -51,6 +52,7 @@ export function useDashboardData(options: DashboardDataOptions = {}): DashboardD
   const [memories, setMemories] = useState<Memory[]>([]);
   const [memoriesLoading, setMemoriesLoading] = useState(true);
   const [tokenData, setTokenData] = useState<TokenData | null>(null);
+  const [remoteWorkspace, setRemoteWorkspace] = useState(false);
   
   // Refs for callbacks (to avoid stale closures in subscriptions)
   const refreshMemoriesRef = useRef<((signal?: AbortSignal) => Promise<void>) | undefined>(undefined);
@@ -169,6 +171,17 @@ export function useDashboardData(options: DashboardDataOptions = {}): DashboardD
     // Initial fetch
     refreshMemories(controller.signal);
     refreshTokens(controller.signal);
+
+    // Check if workspace is remote (one-time per agent switch)
+    const params = new URLSearchParams({ agentId: activeAgentId });
+    fetch(`/api/workspace?${params.toString()}`, { signal: controller.signal })
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (!controller.signal.aborted) {
+          setRemoteWorkspace(data?.remoteWorkspace === true);
+        }
+      })
+      .catch(() => {});
     
     // Polling as safety net — SSE/WS provide real-time updates
     const memIv = setInterval(() => refreshMemories(controller.signal), MEMORY_POLL_INTERVAL);
@@ -185,6 +198,7 @@ export function useDashboardData(options: DashboardDataOptions = {}): DashboardD
     memories,
     memoriesLoading,
     tokenData,
+    remoteWorkspace,
     refreshMemories,
     refreshTokens,
   };

@@ -92,6 +92,9 @@ describe('useDashboardData', () => {
       if (url === '/api/memories?agentId=bravo') {
         return bravoMemories.promise;
       }
+      if (url.startsWith('/api/workspace')) {
+        return Promise.resolve(jsonResponse({ ok: true, files: [], remoteWorkspace: false }));
+      }
       throw new Error(`Unexpected fetch: ${url}`);
     }) as typeof globalThis.fetch;
 
@@ -146,6 +149,9 @@ describe('useDashboardData', () => {
       if (url === '/api/memories?agentId=bravo') {
         return bravoMemories.promise;
       }
+      if (url.startsWith('/api/workspace')) {
+        return Promise.resolve(jsonResponse({ ok: true, files: [], remoteWorkspace: false }));
+      }
       throw new Error(`Unexpected fetch: ${url}`);
     }) as typeof globalThis.fetch;
 
@@ -185,6 +191,9 @@ describe('useDashboardData', () => {
       }
       if (url === '/api/memories?agentId=alpha') {
         return Promise.resolve(jsonResponse([{ type: 'section', text: 'Alpha memory' }]));
+      }
+      if (url.startsWith('/api/workspace')) {
+        return Promise.resolve(jsonResponse({ ok: true, files: [], remoteWorkspace: false }));
       }
       throw new Error(`Unexpected fetch: ${url}`);
     }) as typeof globalThis.fetch;

@@ -104,6 +104,8 @@ interface WorkspacePanelProps {
   memories: Memory[];
   onRefreshMemories: (signal?: AbortSignal) => void | Promise<void>;
   memoriesLoading?: boolean;
+  /** True when the workspace lives in a remote sandbox (gateway RPC mode). */
+  remoteWorkspace?: boolean;
   /** Render in compact dropdown mode (chat-first topbar panel). */
   compact?: boolean;
   /** Switch the app to full kanban board view. */
@@ -117,6 +119,7 @@ export function WorkspacePanel({
   memories,
   onRefreshMemories,
   memoriesLoading,
+  remoteWorkspace = false,
   compact = false,
   onOpenBoard,
   onOpenTask,
@@ -157,6 +160,7 @@ export function WorkspacePanel({
                 memories={memories}
                 onRefresh={onRefreshMemories}
                 isLoading={memoriesLoading}
+                remoteWorkspace={remoteWorkspace}
                 hideHeader
                 compact={compact}
               />

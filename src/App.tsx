@@ -268,7 +268,7 @@ export default function App({ onLogout }: AppProps) {
   }, [handleFileChanged]);
 
   // Dashboard data (extracted hook) — single SSE connection handles all events
-  const { memories, memoriesLoading, tokenData, refreshMemories } = useDashboardData({
+  const { memories, memoriesLoading, tokenData, remoteWorkspace, refreshMemories } = useDashboardData({
     agentId: workspaceAgentId,
     onFileChanged,
   });
@@ -663,6 +663,7 @@ export default function App({ onLogout }: AppProps) {
               memories={memories}
               onRefreshMemories={refreshMemories}
               memoriesLoading={memoriesLoading}
+              remoteWorkspace={remoteWorkspace}
               onOpenBoard={() => setViewMode('kanban')}
               onOpenTask={openTaskInBoard}
             />
@@ -703,6 +704,7 @@ export default function App({ onLogout }: AppProps) {
           memories={memories}
           onRefreshMemories={refreshMemories}
           memoriesLoading={memoriesLoading}
+          remoteWorkspace={remoteWorkspace}
           compact
           onOpenBoard={() => setViewMode('kanban')}
           onOpenTask={openTaskInBoard}
