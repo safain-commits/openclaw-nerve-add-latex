@@ -7,6 +7,7 @@
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { execSync } from 'node:child_process';
+import type { ExecSyncOptions } from 'node:child_process';
 import { join } from 'node:path';
 import crypto from 'node:crypto';
 import os from 'node:os';
@@ -238,6 +239,11 @@ interface PendingDeviceRequest {
   deviceId?: string;
   publicKey?: string;
 }
+
+type PendingDeviceExec = (
+  command: string,
+  options?: Pick<ExecSyncOptions, 'timeout' | 'stdio'>,
+) => string | Buffer;
 
 function hasFullOperatorScopes(scopes?: string[]): boolean {
   return FULL_OPERATOR_SCOPES.every(scope => (scopes || []).includes(scope));
@@ -508,7 +514,7 @@ export function fixGatewayDeviceScopes(opts: {
  * If the request cannot be identified unambiguously, fail closed and require manual approval.
  */
 export function approvePendingNerveDevice(deps: {
-  exec?: typeof execSync;
+  exec?: PendingDeviceExec;
 } = {}): { ok: boolean; approved: number; message: string } {
   const run = deps.exec || execSync;
   const identity = readNerveDeviceIdentity();

@@ -232,7 +232,7 @@ describe('gateway detection and repair', () => {
 
     const { mod } = await importGatewayDetect();
     const result = mod.approvePendingNerveDevice({
-      exec: execSyncMock as typeof import('node:child_process').execSync,
+      exec: execSyncMock,
     });
 
     expect(result).toMatchObject({
@@ -271,7 +271,7 @@ describe('gateway detection and repair', () => {
 
     const { mod } = await importGatewayDetect();
     const result = mod.approvePendingNerveDevice({
-      exec: execSyncMock as typeof import('node:child_process').execSync,
+      exec: execSyncMock,
     });
 
     expect(result.ok).toBe(false);
@@ -300,7 +300,7 @@ describe('gateway detection and repair', () => {
 
     const { mod } = await importGatewayDetect();
     const result = mod.approvePendingNerveDevice({
-      exec: execSyncMock as typeof import('node:child_process').execSync,
+      exec: execSyncMock,
     });
 
     expect(result.ok).toBe(false);
@@ -338,7 +338,7 @@ describe('gateway detection and repair', () => {
 
     const { mod } = await importGatewayDetect();
     const result = mod.approvePendingNerveDevice({
-      exec: execSyncMock as typeof import('node:child_process').execSync,
+      exec: execSyncMock,
     });
 
     expect(result.ok).toBe(false);
@@ -361,7 +361,7 @@ describe('gateway detection and repair', () => {
 
     const { mod } = await importGatewayDetect();
     const result = mod.approvePendingNerveDevice({
-      exec: execSyncMock as typeof import('node:child_process').execSync,
+      exec: execSyncMock,
     });
 
     expect(result.ok).toBe(false);
