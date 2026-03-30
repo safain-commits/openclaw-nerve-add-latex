@@ -1158,8 +1158,9 @@ describe('POST /api/kanban/tasks/:id/execute', () => {
     await new Promise(resolve => setTimeout(resolve, 20));
   });
 
-  it('attaches runId when macOS fallback helper returns it', async () => {
+  it('attaches child session metadata immediately when fallback launch returns it', async () => {
     const expectedRunId = 'run-xyz-789';
+    const expectedChildSessionKey = 'agent:reviewer:subagent:worker-xyz';
 
     vi.doMock('../lib/kanban-subagent-fallback.js', () => ({
       buildKanbanFallbackRunKey: buildMockRootSessionKey,
@@ -1167,6 +1168,7 @@ describe('POST /api/kanban/tasks/:id/execute', () => {
       launchKanbanFallbackSubagentViaRpc: vi.fn(async ({ label, parentSessionKey }: { label: string; parentSessionKey: string }) => ({
         sessionKey: buildMockRootSessionKey(label),
         parentSessionKey,
+        childSessionKey: expectedChildSessionKey,
         knownSessionKeysBefore: [parentSessionKey],
         runId: expectedRunId,
       })),
@@ -1178,15 +1180,15 @@ describe('POST /api/kanban/tasks/:id/execute', () => {
     const res = await app.request(`/api/kanban/tasks/${task.id}/execute`, json({}));
     expect(res.status).toBe(200);
 
-    // Wait for fire-and-forget to attach runId
+    // Wait for fire-and-forget to attach launch metadata
     await new Promise(resolve => setTimeout(resolve, 100));
 
-    // Refetch task to verify runId was attached
     const refetchRes = await app.request(`/api/kanban/tasks/${task.id}`);
     const latest = await refetchRes.json() as KanbanTask;
 
     expect(latest.run).toBeDefined();
     expect(latest.run!.runId).toBe(expectedRunId);
+    expect(latest.run!.childSessionKey).toBe(expectedChildSessionKey);
   });
 
   it('marks the run back to todo with Spawn failed error after macOS fallback launch rejection', async () => {
@@ -2352,6 +2354,74 @@ describe('POST /api/kanban/tasks/:id/complete — run key integrity', () => {
     expect(latest?.result).toBeUndefined();
   });
 
+  it('polls the exact child session returned by fallback launch without relying on label discovery', async () => {
+    const childSessionKey = 'agent:reviewer:subagent:exact-child';
+
+    vi.doMock('../lib/kanban-subagent-fallback.js', () => ({
+      buildKanbanFallbackRunKey: buildMockRootSessionKey,
+      resolveKanbanFallbackParentSessionKey: vi.fn(() => 'agent:reviewer:main'),
+      launchKanbanFallbackSubagentViaRpc: vi.fn(async ({ label, parentSessionKey }: { label: string; parentSessionKey: string }) => ({
+        sessionKey: buildMockRootSessionKey(label),
+        parentSessionKey,
+        childSessionKey,
+        knownSessionKeysBefore: [parentSessionKey],
+        runId: 'run-exact-child',
+      })),
+    }));
+
+    const gatewayRpcMock = vi.fn(async (method: string, params?: Record<string, unknown>) => {
+      if (method === 'sessions.list') {
+        return {
+          sessions: [
+            { sessionKey: 'agent:reviewer:main' },
+            {
+              sessionKey: childSessionKey,
+              status: 'done',
+            },
+          ],
+        };
+      }
+      if (method === 'sessions.get') {
+        expect(params?.key).toBe(childSessionKey);
+        return {
+          messages: [
+            {
+              role: 'assistant',
+              content: 'Exact child done',
+            },
+          ],
+        };
+      }
+      return {};
+    });
+
+    const app = await buildApp({ gatewayRpcMock, executionMode: 'fallback' });
+    const task = await createTask(app, { status: 'todo', title: 'Exact child task', assignee: 'agent:reviewer' });
+
+    const execRes = await app.request(`/api/kanban/tasks/${task.id}/execute`, json({}));
+    expect(execRes.status).toBe(200);
+
+    await new Promise((resolve) => setTimeout(resolve, 3_200));
+
+    const tasksRes = await app.request('/api/kanban/tasks');
+    const tasks = await tasksRes.json() as { items: KanbanTask[] };
+    const completed = tasks.items.find((item) => item.id === task.id);
+    expect(completed?.status).toBe('review');
+    expect(completed?.run?.childSessionKey).toBe(childSessionKey);
+    expect(completed?.result).toContain('Exact child done');
+
+    const parentReportCall = (gatewayRpcMock as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([method, params]) => method === 'sessions.send' && params?.key === 'agent:reviewer:main'
+    );
+    expect(parentReportCall).toBeDefined();
+    expect(parentReportCall?.[1]).toMatchObject({
+      key: 'agent:reviewer:main',
+    });
+    expect(String((parentReportCall?.[1] as Record<string, unknown>).message ?? '')).toContain('Exact child task');
+    expect(String((parentReportCall?.[1] as Record<string, unknown>).message ?? '')).toContain(childSessionKey);
+    expect(String((parentReportCall?.[1] as Record<string, unknown>).message ?? '')).toContain('Exact child done');
+  });
+
   it('polls the spawned child session via gateway RPC and completes when session reports done status', async () => {
     let runKey = '';
     const childSessionKey = 'agent:reviewer:subagent:test-child';
@@ -2491,6 +2561,14 @@ describe('POST /api/kanban/tasks/:id/complete — run key integrity', () => {
     expect(failed?.run?.sessionKey).toBe(runKey);
     expect(failed?.run?.childSessionKey).toBe(childSessionKey);
     expect(failed?.run?.error).toBe('Worker crashed');
+
+    const parentReportCall = (gatewayRpcMock as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([method, params]) => method === 'sessions.send' && params?.key === 'agent:reviewer:main'
+    );
+    expect(parentReportCall).toBeDefined();
+    expect(String((parentReportCall?.[1] as Record<string, unknown>).message ?? '')).toContain('Failed task');
+    expect(String((parentReportCall?.[1] as Record<string, unknown>).message ?? '')).toContain(childSessionKey);
+    expect(String((parentReportCall?.[1] as Record<string, unknown>).message ?? '')).toContain('Worker crashed');
   });
 
   it('ignores late stale poller completion from run 1 after run 2 is active', async () => {
