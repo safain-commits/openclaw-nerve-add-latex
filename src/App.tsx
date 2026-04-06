@@ -77,6 +77,17 @@ function buildWorkspaceSwitchErrorMessage(result: {
   return `Could not save ${fileLabel}. Resolve it before switching agents.`;
 }
 
+function getInitialViewMode(canShowKanban: boolean): ViewMode {
+  try {
+    const saved = localStorage.getItem('nerve:viewMode');
+    if (saved === 'kanban' && canShowKanban) return 'kanban';
+  } catch {
+    // ignore storage errors
+  }
+
+  return 'chat';
+}
+
 export default function App({ onLogout }: AppProps) {
   // Gateway state
   const {
@@ -111,6 +122,7 @@ export default function App({ onLogout }: AppProps) {
     eventsVisible, logVisible,
     toggleEvents, toggleLog, toggleTelemetry,
     setTheme, setFont,
+    kanbanVisible,
   } = useSettings();
 
   // Connection management (extracted hook)
@@ -306,27 +318,27 @@ export default function App({ onLogout }: AppProps) {
   const [spawnDialogOpen, setSpawnDialogOpen] = useState(false);
 
   // View mode state (chat | kanban), persisted to localStorage
-  const [viewMode, setViewModeRaw] = useState<ViewMode>(() => {
-    try {
-      const saved = localStorage.getItem('nerve:viewMode');
-      if (saved === 'kanban') return 'kanban';
-    } catch { /* ignore */ }
-    return 'chat';
-  });
+  const [viewMode, setViewModeRaw] = useState<ViewMode>(() => getInitialViewMode(kanbanVisible));
   const [pendingTaskId, setPendingTaskId] = useState<string | null>(null);
   const setViewMode = useCallback((mode: ViewMode) => {
-    setViewModeRaw(mode);
+    const nextMode = mode === 'kanban' && !kanbanVisible ? 'chat' : mode;
+    setViewModeRaw(nextMode);
 
-    if (mode === 'kanban' && isCompactLayout) {
+    if (nextMode === 'kanban' && isCompactLayout) {
       setFileBrowserCollapsed(true);
     }
 
-    try { localStorage.setItem('nerve:viewMode', mode); } catch { /* ignore */ }
-  }, [isCompactLayout, setFileBrowserCollapsed]);
+    try { localStorage.setItem('nerve:viewMode', nextMode); } catch { /* ignore */ }
+  }, [isCompactLayout, kanbanVisible, setFileBrowserCollapsed]);
   const openTaskInBoard = useCallback((taskId: string) => {
     setPendingTaskId(taskId);
     setViewMode('kanban');
   }, [setViewMode]);
+
+  useEffect(() => {
+    if (kanbanVisible || viewMode !== 'kanban') return;
+    setViewMode('chat');
+  }, [kanbanVisible, setViewMode, viewMode]);
 
   const openWorkspacePath = useCallback(async (targetPath: string) => {
     const params = new URLSearchParams({ path: targetPath, agentId: workspaceAgentId });
@@ -381,9 +393,10 @@ export default function App({ onLogout }: AppProps) {
     onRefreshSessions: refreshSessions,
     onRefreshMemory: refreshMemories,
     onSetViewMode: setViewMode,
+    canShowKanban: kanbanVisible,
   }), [openSpawnDialog, handleReset, toggleSound, handleAbort, openSettings, openSearch,
     setTheme, setFont, setTtsProvider, handleToggleWakeWord, toggleEvents, toggleLog, toggleTelemetry,
-    refreshSessions, refreshMemories, setViewMode]);
+    refreshSessions, refreshMemories, setViewMode, kanbanVisible]);
 
   // Keyboard shortcut handlers with useCallback
   const handleOpenPalette = useCallback(() => setPaletteOpen(true), []);
@@ -822,6 +835,7 @@ export default function App({ onLogout }: AppProps) {
           workspacePanel={compactWorkspacePanel}
           viewMode={viewMode}
           onViewModeChange={setViewMode}
+          showKanbanView={kanbanVisible}
         />
       )}
       
