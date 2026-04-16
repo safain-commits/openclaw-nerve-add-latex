@@ -1102,29 +1102,36 @@ export const InputBar = forwardRef<InputBarHandle, InputBarProps>(function Input
       return;
     }
 
-    // Up arrow — navigate to older history (only when cursor at start or input is empty)
+    // Up arrow history behavior for single-line inputs:
+    // 1) caret not at start -> move caret to start
+    // 2) caret already at start -> load older history entry
+    // Multi-line input keeps native ArrowUp behavior.
     if (e.key === 'ArrowUp' && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
       const input = inputRef.current;
       if (!input) return;
 
-      // Only trigger if cursor is at the beginning or input is single line
       const isAtStart = input.selectionStart === 0 && input.selectionEnd === 0;
       const isSingleLine = !input.value.includes('\n');
 
-      if (isAtStart || isSingleLine) {
-        const entry = inputHistory.navigateUp(input.value);
-        if (entry !== null) {
-          e.preventDefault();
-          input.value = entry;
-          setDraftText(entry);
-          input.style.height = 'auto';
-          input.style.height = Math.min(input.scrollHeight, 160) + 'px';
-          input.setSelectionRange(input.value.length, input.value.length);
-        }
+      if (!isSingleLine) return;
+
+      if (!isAtStart) {
+        e.preventDefault();
+        input.setSelectionRange(0, 0);
+        return;
+      }
+
+      const entry = inputHistory.navigateUp(input.value);
+      if (entry !== null) {
+        e.preventDefault();
+        input.value = entry;
+        setDraftText(entry);
+        input.style.height = 'auto';
+        input.style.height = Math.min(input.scrollHeight, 160) + 'px';
+        input.setSelectionRange(input.value.length, input.value.length);
       }
       return;
     }
-
     // Down arrow — navigate to newer history or back to draft
     if (e.key === 'ArrowDown' && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
       if (inputHistory.isNavigating()) {

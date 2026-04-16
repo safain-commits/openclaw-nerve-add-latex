@@ -38,14 +38,18 @@ vi.mock('@/hooks/useTabCompletion', () => ({
   }),
 }));
 
-vi.mock('@/hooks/useInputHistory', () => ({
-  useInputHistory: () => ({
+const { mockUseInputHistory } = vi.hoisted(() => ({
+  mockUseInputHistory: vi.fn(() => ({
     addToHistory: vi.fn(),
     isNavigating: vi.fn(() => false),
     reset: vi.fn(),
     navigateUp: vi.fn(() => null),
     navigateDown: vi.fn(() => null),
-  }),
+  })),
+}));
+
+vi.mock('@/hooks/useInputHistory', () => ({
+  useInputHistory: mockUseInputHistory,
 }));
 
 vi.mock('@/contexts/SessionContext', () => ({
@@ -727,4 +731,73 @@ describe('InputBar', () => {
     expect(screen.getByText('Upload')).toBeInTheDocument();
   });
 
+});
+
+describe('InputBar ArrowUp behavior', () => {
+  it('moves caret to start on single-line input before recalling history', async () => {
+    const navigateUp = vi.fn(() => 'previous command');
+    mockUseInputHistory.mockReturnValue({
+      addToHistory: vi.fn(),
+      isNavigating: vi.fn(() => false),
+      reset: vi.fn(),
+      navigateUp,
+      navigateDown: vi.fn(() => null),
+    } as ReturnType<typeof useInputHistory>);
+
+    render(<InputBar onSend={vi.fn()} isGenerating={false} />);
+    const input = screen.getByLabelText('Message input') as HTMLTextAreaElement;
+    fireEvent.change(input, { target: { value: 'current draft' } });
+    input.setSelectionRange(input.value.length, input.value.length);
+
+    fireEvent.keyDown(input, { key: 'ArrowUp' });
+
+    expect(navigateUp).not.toHaveBeenCalled();
+    expect(input.value).toBe('current draft');
+    expect(input.selectionStart).toBe(0);
+    expect(input.selectionEnd).toBe(0);
+  });
+
+  it('recalls history when caret is already at start on single-line input', async () => {
+    const navigateUp = vi.fn(() => 'previous command');
+    mockUseInputHistory.mockReturnValue({
+      addToHistory: vi.fn(),
+      isNavigating: vi.fn(() => false),
+      reset: vi.fn(),
+      navigateUp,
+      navigateDown: vi.fn(() => null),
+    } as ReturnType<typeof useInputHistory>);
+
+    render(<InputBar onSend={vi.fn()} isGenerating={false} />);
+    const input = screen.getByLabelText('Message input') as HTMLTextAreaElement;
+    fireEvent.change(input, { target: { value: 'current draft' } });
+    input.setSelectionRange(0, 0);
+
+    fireEvent.keyDown(input, { key: 'ArrowUp' });
+
+    expect(navigateUp).toHaveBeenCalledWith('current draft');
+    expect(input.value).toBe('previous command');
+  });
+
+  it('keeps native behavior for multi-line input', async () => {
+    const navigateUp = vi.fn(() => 'previous command');
+    mockUseInputHistory.mockReturnValue({
+      addToHistory: vi.fn(),
+      isNavigating: vi.fn(() => false),
+      reset: vi.fn(),
+      navigateUp,
+      navigateDown: vi.fn(() => null),
+    } as ReturnType<typeof useInputHistory>);
+
+    render(<InputBar onSend={vi.fn()} isGenerating={false} />);
+    const input = screen.getByLabelText('Message input') as HTMLTextAreaElement;
+    fireEvent.change(input, { target: { value: 'line 1\nline 2' } });
+    input.setSelectionRange(input.value.length, input.value.length);
+    const beforeCaret = input.selectionStart;
+
+    fireEvent.keyDown(input, { key: 'ArrowUp' });
+
+    expect(navigateUp).not.toHaveBeenCalled();
+    expect(input.value).toBe('line 1\nline 2');
+    expect(input.selectionStart).toBe(beforeCaret);
+  });
 });
