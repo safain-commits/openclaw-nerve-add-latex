@@ -1242,6 +1242,7 @@
 }
 .markdown-content p {
   @apply my-2;
+  white-space: pre-wrap;
 }
 .markdown-content ul,
 .markdown-content ol {
