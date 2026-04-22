@@ -756,6 +756,29 @@ export function FileTreePanel({
               showToastForAgent(workspaceAgentId, { type: 'error', message }, 4500);
             });
         },
+        onDownload: () => {
+          const endpoint = menuEntry.type === 'directory' ? '/api/files/archive' : '/api/files/download';
+          const url = `${endpoint}?path=${encodeURIComponent(menuEntry.path)}&agentId=${encodeURIComponent(workspaceAgentId)}`;
+          const anchor = document.createElement('a');
+          anchor.href = url;
+          anchor.rel = 'noopener noreferrer';
+          anchor.click();
+        },
+        onCopyPath: () => {
+          const workspacePath = menuEntry.path === '.' ? '/workspace' : `/workspace/${menuEntry.path}`;
+          if (!navigator.clipboard?.writeText) {
+            showToastForAgent(workspaceAgentId, { type: 'error', message: 'Clipboard not available' }, 3500);
+            return;
+          }
+          navigator.clipboard.writeText(workspacePath)
+            .then(() => {
+              showToastForAgent(workspaceAgentId, { type: 'success', message: 'Copied path' }, 1800);
+            })
+            .catch((error) => {
+              console.error('[FileTreePanel] copy-path failed:', error);
+              showToastForAgent(workspaceAgentId, { type: 'error', message: 'Copy failed' }, 3500);
+            });
+        },
         onRename: () => startRename(menuEntry),
         onTrash: () => { void moveToTrash(menuEntry); },
       })

@@ -1,9 +1,9 @@
 import type { LucideIcon } from 'lucide-react';
-import { Paperclip, Pencil, RotateCcw, Trash2 } from 'lucide-react';
+import { Copy, Download, Paperclip, Pencil, RotateCcw, Trash2 } from 'lucide-react';
 import type { TreeEntry } from './types';
 
 export interface FileTreeMenuAction {
-  id: 'restore' | 'add-to-chat' | 'rename' | 'trash';
+  id: 'restore' | 'add-to-chat' | 'download' | 'download-archive' | 'copy-path' | 'rename' | 'trash';
   label: string;
   icon: LucideIcon;
   destructive?: boolean;
@@ -16,6 +16,8 @@ export interface FileTreeMenuActionOptions {
   isCustomWorkspace: boolean;
   onRestore: () => void;
   onAddToChat: () => void;
+  onDownload: () => void;
+  onCopyPath: () => void;
   onRename: () => void;
   onTrash: () => void;
 }
@@ -47,6 +49,25 @@ export function buildFileTreeMenuActions(
       label: 'Add to chat',
       icon: Paperclip,
       onSelect: options.onAddToChat,
+    });
+  }
+
+  if (!inTrash && path !== '.trash') {
+    const isDirectory = entry.type === 'directory';
+    actions.push({
+      id: isDirectory ? 'download-archive' : 'download',
+      label: isDirectory ? 'Download as archive' : 'Download',
+      icon: Download,
+      onSelect: options.onDownload,
+    });
+  }
+
+  if (path !== '.trash') {
+    actions.push({
+      id: 'copy-path',
+      label: entry.type === 'directory' ? 'Copy directory path' : 'Copy file path',
+      icon: Copy,
+      onSelect: options.onCopyPath,
     });
   }
 

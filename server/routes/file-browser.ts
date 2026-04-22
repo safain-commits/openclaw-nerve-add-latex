@@ -19,6 +19,7 @@ import { Hono, type Context } from 'hono';
 import fs from 'node:fs/promises';
 import fsSync from 'node:fs';
 import { Readable } from 'node:stream';
+import { spawn } from 'node:child_process';
 import path from 'node:path';
 import {
   getWorkspaceRoot,
@@ -914,6 +915,116 @@ app.get('/api/files/raw', async (c) => {
   } catch {
     return c.json({ ok: false, error: 'Failed to read file' }, 500);
   }
+});
+
+
+// ── GET /api/files/download ─────────────────────────────────────────
+
+function buildAttachmentHeader(filename: string): string {
+  const safe = filename.replace(/\r|\n/g, '').replace(/"/g, '\'');
+  return `attachment; filename="${safe}"`;
+}
+
+app.get('/api/files/download', async (c) => {
+  const filePath = c.req.query('path');
+  if (!filePath) {
+    return c.json({ ok: false, error: 'Missing path parameter' }, 400);
+  }
+
+  let workspace: ScopedWorkspace;
+  try {
+    workspace = resolveScopedWorkspace(c.req.query('agentId'));
+  } catch (err) {
+    return handleAgentWorkspaceError(c, err);
+  }
+
+  const remoteBlock = await requireLocalWorkspace(c, workspace);
+  if (remoteBlock) return remoteBlock;
+
+  const resolved = await resolveWorkspacePathForRoot(workspace.workspaceRoot, filePath);
+  if (!resolved) {
+    return c.json({ ok: false, error: 'Invalid or excluded path' }, 403);
+  }
+
+  try {
+    const stat = await fs.stat(resolved);
+    if (!stat.isFile()) {
+      return c.json({ ok: false, error: 'Not a file' }, 400);
+    }
+
+    const stream = fsSync.createReadStream(resolved);
+    const webStream = Readable.toWeb(stream);
+
+    return new Response(webStream, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/octet-stream',
+        'Content-Length': String(stat.size),
+        'Cache-Control': 'no-cache',
+        'Content-Disposition': buildAttachmentHeader(path.basename(resolved)),
+      },
+    });
+  } catch {
+    return c.json({ ok: false, error: 'Failed to read file' }, 500);
+  }
+});
+
+// ── GET /api/files/archive ──────────────────────────────────────────
+
+app.get('/api/files/archive', async (c) => {
+  const dirPath = c.req.query('path');
+  if (!dirPath) {
+    return c.json({ ok: false, error: 'Missing path parameter' }, 400);
+  }
+
+  let workspace: ScopedWorkspace;
+  try {
+    workspace = resolveScopedWorkspace(c.req.query('agentId'));
+  } catch (err) {
+    return handleAgentWorkspaceError(c, err);
+  }
+
+  const remoteBlock = await requireLocalWorkspace(c, workspace);
+  if (remoteBlock) return remoteBlock;
+
+  const resolved = await resolveWorkspacePathForRoot(workspace.workspaceRoot, dirPath);
+  if (!resolved) {
+    return c.json({ ok: false, error: 'Invalid or excluded path' }, 403);
+  }
+
+  try {
+    const stat = await fs.stat(resolved);
+    if (!stat.isDirectory()) {
+      return c.json({ ok: false, error: 'Not a directory' }, 400);
+    }
+  } catch {
+    return c.json({ ok: false, error: 'Not found' }, 404);
+  }
+
+  const archiveName = `${path.basename(resolved) || 'workspace'}.tar.gz`;
+  const rel = dirPath;
+
+  const child = spawn('tar', ['-czf', '-', '-C', workspace.workspaceRoot, '--', rel], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  child.stderr?.on('data', (data) => {
+    console.warn('[file-browser] archive stderr:', String(data).trim());
+  });
+
+  if (!child.stdout) {
+    return c.json({ ok: false, error: 'Failed to spawn archiver' }, 500);
+  }
+
+  const webStream = Readable.toWeb(child.stdout);
+  return new Response(webStream, {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/gzip',
+      'Cache-Control': 'no-cache',
+      'Content-Disposition': buildAttachmentHeader(archiveName),
+    },
+  });
 });
 
 export default app;
