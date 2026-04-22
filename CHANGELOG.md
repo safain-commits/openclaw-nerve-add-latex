@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Highlights
+
+**Multi-agent session surfacing is much more faithful and readable.** Sidebar roots now keep `ui`, `subagent`, and persisted descendant sessions under the correct owning agent, canonical identity names render correctly for top-level roots including `agent:main:main`, and browser refresh now returns you to the last chat you were viewing instead of always jumping back to the main root.
+
+**Academic chat rendering is more capable.** Operator and user chat bubbles now preserve manual line breaks, and markdown rendering now supports KaTeX math for both standard Markdown delimiters and ChatGPT-style escaped delimiters, making Athena-style academic workflows much more usable.
+
+### Added
+- KaTeX-powered math rendering in `MarkdownRenderer`, including support for `$...$`, `$$...$$`, `\(...\)`, and `\[...\]` delimiters
+
+### Changed
+- Browser session state now remembers the last selected chat across refreshes via local storage
+- Session inventory hydration now merges persisted session records with live runtime data so older multi-agent roots remain visible in the sidebar
+
+### Fixed
+- Sidebar tree grouping now keeps `agent:<id>:ui:*` and `agent:<id>:subagent:*` sessions nested under the correct top-level root instead of surfacing as stray roots
+- Top-level root labels now prefer `IDENTITY.md` names consistently, fixing canonical display issues for the main root and other top-level agent sessions
+- Root-session label behavior is now documented by implementation, clarifying why custom rename labels do not override canonical root identities
+- User and operator chat messages now preserve newline formatting in rendered bubbles
+
+
 ## [1.5.2] - 2026-03-30
 
 ### Highlights

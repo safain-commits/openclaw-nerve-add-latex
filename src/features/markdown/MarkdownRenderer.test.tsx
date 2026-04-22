@@ -62,6 +62,13 @@ describe('MarkdownRenderer', () => {
     expect(items).toHaveLength(3);
   });
 
+  it('renders inline and block math with KaTeX', () => {
+    render(<MarkdownRenderer content={'Inline $E=mc^2$\n\n$$\\int_0^1 x^2 \\, dx$$'} />);
+    expect(document.querySelector('.katex')).toBeTruthy();
+    expect(document.querySelectorAll('.katex')).toHaveLength(2);
+    expect(document.body.textContent).toContain('Inline');
+  });
+
   it('renders links', () => {
     render(<MarkdownRenderer content="[example](https://example.com)" />);
     const link = document.querySelector('a');

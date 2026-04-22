@@ -1,6 +1,9 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef } from 'react';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 import { hljs } from '@/lib/highlight';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { escapeRegex } from '@/lib/constants';
@@ -160,6 +163,12 @@ function highlightText(text: string, query: string): React.ReactNode {
   );
 }
 
+function normalizeMathDelimiters(content: string): string {
+  return content
+    .replace(/\\\[((?:[\s\S])*?)\\\]/g, (_match, math) => `$$\n${String(math).trim()}\n$$`)
+    .replace(/\\\(((?:[\s\S])*?)\\\)/g, (_match, math) => `$${String(math).trim()}$`);
+}
+
 function processChildren(
   children: React.ReactNode,
   options: {
@@ -299,6 +308,7 @@ export function MarkdownRenderer({
   workspaceAgentId,
 }: MarkdownRendererProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const normalizedContent = useMemo(() => normalizeMathDelimiters(content), [content]);
 
   const childOptions = useMemo(() => ({
     searchQuery,
@@ -352,7 +362,7 @@ export function MarkdownRenderer({
     });
 
     return () => window.cancelAnimationFrame(frame);
-  }, [content, currentDocumentPath, scrollToAnchor]);
+  }, [normalizedContent, currentDocumentPath, scrollToAnchor]);
 
   const components = useMemo(() => {
     const createHeading = (Tag: 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6') =>
@@ -539,7 +549,8 @@ export function MarkdownRenderer({
   return (
     <div ref={containerRef} className={`markdown-content ${className}`}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkStableHeadingIds]}
+        remarkPlugins={[remarkGfm, remarkMath, remarkStableHeadingIds]}
+        rehypePlugins={[rehypeKatex]}
         urlTransform={(url) => transformMarkdownUrl(url, {
           currentDocumentPath,
           workspaceAgentId,
@@ -547,7 +558,7 @@ export function MarkdownRenderer({
         })}
         components={components}
       >
-        {content}
+        {normalizedContent}
       </ReactMarkdown>
     </div>
   );
