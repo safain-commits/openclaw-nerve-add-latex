@@ -765,12 +765,15 @@ export function FileTreePanel({
           anchor.click();
         },
         onCopyPath: () => {
-          const workspacePath = menuEntry.path === '.' ? '/workspace' : `/workspace/${menuEntry.path}`;
+          const rootPath = workspaceInfo?.rootPath || '';
+          const absolutePath = menuEntry.path === '.'
+            ? rootPath
+            : `${rootPath.replace(/\/+$/, '')}/${menuEntry.path.replace(/^\/+/, '')}`;
           if (!navigator.clipboard?.writeText) {
             showToastForAgent(workspaceAgentId, { type: 'error', message: 'Clipboard not available' }, 3500);
             return;
           }
-          navigator.clipboard.writeText(workspacePath)
+          navigator.clipboard.writeText(absolutePath)
             .then(() => {
               showToastForAgent(workspaceAgentId, { type: 'success', message: 'Copied path' }, 1800);
             })
