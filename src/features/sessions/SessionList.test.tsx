@@ -34,7 +34,7 @@ describe('SessionList empty state', () => {
     expect(screen.getByText('No active sessions')).toBeInTheDocument();
   });
 
-  it('shows orphaned agent descendants instead of the empty state when cleanup removed the root row', () => {
+  it('shows the empty state when only orphaned agent descendants remain after root cleanup', () => {
     const sessions: Session[] = [
       { sessionKey: 'agent:main:telegram:direct:123', displayName: 'Telegram DM' },
       { sessionKey: 'agent:reviewer:subagent:abc123', label: 'Worker' },
@@ -43,9 +43,9 @@ describe('SessionList empty state', () => {
 
     renderSessionList({ sessions });
 
-    expect(screen.getByText('Telegram DM')).toBeInTheDocument();
-    expect(screen.getByText('Worker')).toBeInTheDocument();
-    expect(screen.queryByText('No active sessions')).not.toBeInTheDocument();
+    expect(screen.getByText('No active sessions')).toBeInTheDocument();
+    expect(screen.queryByText('Telegram DM')).not.toBeInTheDocument();
+    expect(screen.queryByText('Worker')).not.toBeInTheDocument();
   });
 
   it('shows the loading skeleton when loading and all sessions are filtered out', () => {
