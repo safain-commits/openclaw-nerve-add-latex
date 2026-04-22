@@ -773,7 +773,7 @@ export function FileTreePanel({
             showToastForAgent(workspaceAgentId, { type: 'error', message: 'Clipboard not available' }, 3500);
             return;
           }
-          navigator.clipboard.writeText(absolutePath)
+          navigator.clipboard.writeText(`\`${absolutePath}\``)
             .then(() => {
               showToastForAgent(workspaceAgentId, { type: 'success', message: 'Copied path' }, 1800);
             })
