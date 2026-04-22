@@ -19,6 +19,7 @@ import { config } from '../lib/config.js';
 import { rateLimitGeneral } from '../middleware/rate-limit.js';
 import { spawnSubagent } from '../lib/subagent-spawn.js';
 import { normalizeAgentId } from '../lib/agent-workspace.js';
+import { listConfiguredAgentWorkspaces } from '../lib/openclaw-config.js';
 
 const app = new Hono();
 const CRON_SESSION_RE = /^agent:[^:]+:cron:[^:]+(?::run:.+)?$/;
@@ -69,6 +70,24 @@ async function loadSessionStore(): Promise<Record<string, StoredSessionSummary |
   return loadSessionStoreFromDir(config.sessionsDir);
 }
 
+function listKnownSessionsDirs(): string[] {
+  const dirs = new Set<string>([config.sessionsDir]);
+  for (const { agentId } of listConfiguredAgentWorkspaces()) {
+    dirs.add(resolveSessionsDir(agentId));
+  }
+  return [...dirs];
+}
+
+function buildKnownAgentWorkspaceMap(): Map<string, string> {
+  const map = new Map<string, string>();
+  map.set('main', join(config.home, '.openclaw', 'workspace'));
+  for (const { agentId, workspaceRoot } of listConfiguredAgentWorkspaces()) {
+    if (!agentId || !workspaceRoot) continue;
+    map.set(agentId, workspaceRoot);
+  }
+  return map;
+}
+
 function getAgentIdFromSessionKey(sessionKey: string): string {
   const match = sessionKey.match(/^agent:([^:]+):/);
   return match?.[1] || 'main';
@@ -78,6 +97,97 @@ function resolveSessionsDir(agentId?: string): string {
   const normalized = normalizeAgentId(agentId);
   if (normalized === 'main') return config.sessionsDir;
   return join(config.home, '.openclaw', 'agents', normalized, 'sessions');
+}
+
+function inferRootSessionKey(sessionKey: string): string | null {
+  const match = sessionKey.match(/^agent:([^:]+):/);
+  return match ? `agent:${match[1]}:main` : null;
+}
+
+function extractIdentityName(content: string): string | null {
+  const normalized = content.replace(/\*\*/g, '');
+  const match = normalized.match(/^\s*(?:[-*]\s*)?Name\s*:\s*(.+?)\s*$/im);
+  return match?.[1]?.trim() || null;
+}
+
+async function loadIdentityNameMap(): Promise<Map<string, string>> {
+  const workspaceMap = buildKnownAgentWorkspaceMap();
+  const entries = await Promise.all([...workspaceMap.entries()].map(async ([agentId, workspaceRoot]) => {
+    try {
+      const content = await readFile(join(workspaceRoot, 'IDENTITY.md'), 'utf-8');
+      const identityName = extractIdentityName(content);
+      return identityName ? [agentId, identityName] as const : null;
+    } catch {
+      return null;
+    }
+  }));
+
+  return new Map(entries.filter((entry): entry is readonly [string, string] => Boolean(entry)));
+}
+
+function synthesizeMissingRootSessions(
+  identityNames: Map<string, string>,
+  sessions: Array<{
+    key: string;
+    sessionKey: string;
+    id?: string;
+    label?: string;
+    displayName?: string;
+    identityName?: string;
+    updatedAt?: number;
+    model?: string;
+    thinking?: string;
+    thinkingLevel?: string;
+    totalTokens?: number;
+    contextTokens?: number;
+    parentId?: string | null;
+  }>,
+): Array<{
+  key: string;
+  sessionKey: string;
+  id?: string;
+  label?: string;
+  displayName?: string;
+  identityName?: string;
+  updatedAt?: number;
+  model?: string;
+  thinking?: string;
+  thinkingLevel?: string;
+  totalTokens?: number;
+  contextTokens?: number;
+  parentId?: string | null;
+}> {
+  const existingKeys = new Set(sessions.map((session) => session.sessionKey));
+  const syntheticRoots = new Map<string, (typeof sessions)[number]>();
+
+  for (const session of sessions) {
+    const rootSessionKey = inferRootSessionKey(session.sessionKey);
+    if (!rootSessionKey || existingKeys.has(rootSessionKey) || rootSessionKey === session.sessionKey) continue;
+
+    const agentId = rootSessionKey.split(':')[1] || 'agent';
+    const identityName = identityNames.get(agentId)?.trim() || undefined;
+    const existing = syntheticRoots.get(rootSessionKey);
+    const updatedAt = typeof session.updatedAt === 'number' ? session.updatedAt : 0;
+    const existingUpdatedAt = typeof existing?.updatedAt === 'number' ? existing.updatedAt : 0;
+    if (existing && existingUpdatedAt >= updatedAt) continue;
+
+    syntheticRoots.set(rootSessionKey, {
+      key: rootSessionKey,
+      sessionKey: rootSessionKey,
+      label: identityName || agentId,
+      displayName: identityName || agentId,
+      identityName,
+      updatedAt: session.updatedAt,
+      model: session.model,
+      thinking: session.thinking,
+      thinkingLevel: session.thinkingLevel,
+      totalTokens: session.totalTokens,
+      contextTokens: session.contextTokens,
+      parentId: null,
+    });
+  }
+
+  return [...sessions, ...syntheticRoots.values()];
 }
 
 /** Resolve the transcript path for a session ID, checking both active and deleted files. */
@@ -282,6 +392,86 @@ app.get('/api/sessions/hidden', rateLimitGeneral, async (c) => {
     const isRemote = errCode === 'ENOENT';
     console.debug('[sessions] hidden list failed:', (err as Error).message);
     return c.json({ ok: true, sessions: [], ...(isRemote ? { remoteWorkspace: true } : {}) });
+  }
+});
+
+app.get('/api/sessions/inventory', rateLimitGeneral, async (c) => {
+  const limitRaw = c.req.query('limit');
+  const activeMinutesRaw = c.req.query('activeMinutes');
+
+  const limit = Number.isFinite(Number(limitRaw)) && Number(limitRaw) > 0
+    ? Math.min(Number(limitRaw), 5000)
+    : 1000;
+  const activeMinutes = Number.isFinite(Number(activeMinutesRaw)) && Number(activeMinutesRaw) > 0
+    ? Number(activeMinutesRaw)
+    : null;
+  const cutoffMs = activeMinutes ? Date.now() - activeMinutes * 60_000 : null;
+
+  try {
+    const identityNames = await loadIdentityNameMap();
+    const storeEntries = await Promise.all(
+      listKnownSessionsDirs().map(async (sessionsDir) => {
+        try {
+          return await loadSessionStoreFromDir(sessionsDir);
+        } catch {
+          return null;
+        }
+      }),
+    );
+
+    const seen = new Set<string>();
+    const sessions = synthesizeMissingRootSessions(
+      identityNames,
+      storeEntries
+        .flatMap((store) => Object.entries(store || {}))
+        .filter(([sessionKey, session]) => {
+          if (!sessionKey || !session || seen.has(sessionKey)) return false;
+          const updatedAt = typeof session.updatedAt === 'number' ? session.updatedAt : 0;
+          if (cutoffMs !== null && updatedAt < cutoffMs) return false;
+          seen.add(sessionKey);
+          return true;
+        })
+        .map(([sessionKey, session]) => {
+          const rootSessionKey = inferRootSessionKey(sessionKey);
+          const rootAgentId = rootSessionKey?.split(':')[1] || null;
+          const identityName = rootSessionKey === sessionKey && rootAgentId
+            ? identityNames.get(rootAgentId)
+            : undefined;
+
+          return {
+            key: sessionKey,
+            sessionKey,
+            id: session?.sessionId,
+            label: session?.label,
+            displayName: session?.displayName || session?.label,
+            identityName,
+            updatedAt: session?.updatedAt,
+            model: session?.model,
+            thinking: session?.thinking,
+            thinkingLevel: session?.thinkingLevel,
+            totalTokens: session?.totalTokens,
+            contextTokens: session?.contextTokens,
+            parentId: inferParentSessionKey(sessionKey),
+          };
+        }),
+    )
+      .sort((a, b) => {
+        const updatedA = typeof a.updatedAt === 'number' ? a.updatedAt : 0;
+        const updatedB = typeof b.updatedAt === 'number' ? b.updatedAt : 0;
+        if (updatedB !== updatedA) return updatedB - updatedA;
+
+        const aIsRoot = a.sessionKey === inferRootSessionKey(a.sessionKey);
+        const bIsRoot = b.sessionKey === inferRootSessionKey(b.sessionKey);
+        if (aIsRoot !== bIsRoot) return aIsRoot ? -1 : 1;
+
+        return a.sessionKey.localeCompare(b.sessionKey);
+      })
+      .slice(0, limit);
+
+    return c.json({ ok: true, sessions });
+  } catch (err) {
+    console.warn('[sessions] inventory list failed:', (err as Error).message);
+    return c.json({ ok: false, error: 'Failed to load session inventory' }, 500);
   }
 });
 

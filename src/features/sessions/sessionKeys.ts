@@ -7,6 +7,7 @@ const CRON_RE = /^((?:agent:[^:]+)):cron:[^:]+$/;
 const CRON_RUN_RE = /^(.+:cron:[^:]+):run:.+$/;
 const DIRECT_RE = /^((?:agent:[^:]+))(?::[^:]+)*:direct:.+$/;
 const CHANNEL_RE = /^((?:agent:[^:]+))(?::[^:]+)*:channel:.+$/;
+const UI_RE = /^((?:agent:[^:]+)):ui:.+$/;
 
 export type SessionType = 'main' | 'subagent' | 'cron' | 'cron-run';
 
@@ -61,6 +62,9 @@ export function getRootAgentId(sessionKey: string): string | null {
   const channelMatch = sessionKey.match(CHANNEL_RE);
   if (channelMatch) return channelMatch[1].split(':')[1] ?? null;
 
+  const uiMatch = sessionKey.match(UI_RE);
+  if (uiMatch) return uiMatch[1].split(':')[1] ?? null;
+
   return null;
 }
 
@@ -84,6 +88,9 @@ export function inferParentSessionKey(sessionKey: string): string | null {
 
   const channelMatch = sessionKey.match(CHANNEL_RE);
   if (channelMatch) return `${channelMatch[1]}:main`;
+
+  const uiMatch = sessionKey.match(UI_RE);
+  if (uiMatch) return `${uiMatch[1]}:main`;
 
   return null;
 }
@@ -158,7 +165,7 @@ export function getSessionDisplayLabel(session: Session, agentName = 'Agent'): s
   const identityName = session.identityName?.trim();
 
   if (sessionKey === 'agent:main:main') {
-    return `${agentName} (main)`;
+    return identityName ? `${identityName} (main)` : `${agentName} (main)`;
   }
 
   if (isTopLevelAgentSessionKey(sessionKey)) {

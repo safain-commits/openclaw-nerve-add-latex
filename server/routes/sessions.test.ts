@@ -8,11 +8,13 @@ import os from 'node:os';
 describe('sessions routes', () => {
   let tmpDir: string;
   let spawnSubagentMock: ReturnType<typeof vi.fn>;
+  let configuredAgentWorkspaces: Array<{ agentId: string; workspaceRoot: string }>;
 
   beforeEach(async () => {
     vi.resetModules();
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'sessions-test-'));
     spawnSubagentMock = vi.fn();
+    configuredAgentWorkspaces = [];
   });
 
   afterEach(async () => {
@@ -38,6 +40,9 @@ describe('sessions routes', () => {
     }));
     vi.doMock('../lib/subagent-spawn.js', () => ({
       spawnSubagent: spawnSubagentMock,
+    }));
+    vi.doMock('../lib/openclaw-config.js', () => ({
+      listConfiguredAgentWorkspaces: () => configuredAgentWorkspaces,
     }));
 
     const mod = await import('./sessions.js');
@@ -160,6 +165,66 @@ describe('sessions routes', () => {
     expect(json.model).toBe('openai-codex/gpt-5.4');
     expect(json.thinking).toBe('medium');
     expect(json.missing).toBe(false);
+  });
+
+  it('lists persisted session inventory across configured agents', async () => {
+    const forgeWorkspace = path.join(tmpDir, 'workspace-forge');
+    configuredAgentWorkspaces = [{ agentId: 'forge', workspaceRoot: forgeWorkspace }];
+
+    await fs.mkdir(forgeWorkspace, { recursive: true });
+    await fs.writeFile(path.join(forgeWorkspace, 'IDENTITY.md'), '# IDENTITY.md\n\n- Name: Ivy\n');
+
+    await fs.writeFile(path.join(tmpDir, 'sessions.json'), JSON.stringify({
+      'agent:main:main': { sessionId: '11111111-1111-1111-1111-111111111111', label: 'Main', updatedAt: 100 },
+      'agent:main:telegram:direct:1': { sessionId: '22222222-2222-2222-2222-222222222222', label: 'Telegram', updatedAt: 50 },
+    }));
+
+    const forgeDir = path.join(tmpDir, '.openclaw', 'agents', 'forge', 'sessions');
+    await fs.mkdir(forgeDir, { recursive: true });
+    await fs.writeFile(path.join(forgeDir, 'sessions.json'), JSON.stringify({
+      'agent:forge:main': { sessionId: '33333333-3333-3333-3333-333333333333', label: 'Forge', updatedAt: 200 },
+      'agent:forge:ui:chat-1': { sessionId: '44444444-4444-4444-4444-444444444444', label: 'Forge UI', updatedAt: 150 },
+    }));
+
+    const app = await buildApp();
+    const res = await app.request('/api/sessions/inventory?limit=10');
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as { ok: boolean; sessions: Array<Record<string, unknown>> };
+    expect(json.ok).toBe(true);
+    expect(json.sessions.map((session) => session.sessionKey)).toEqual([
+      'agent:forge:main',
+      'agent:forge:ui:chat-1',
+      'agent:main:main',
+      'agent:main:telegram:direct:1',
+    ]);
+    expect(json.sessions[0]?.identityName).toBe('Ivy');
+  });
+
+  it('synthesizes a root agent session when only descendants are persisted', async () => {
+    const athenaWorkspace = path.join(tmpDir, 'workspace-athena');
+    configuredAgentWorkspaces = [{ agentId: 'athena', workspaceRoot: athenaWorkspace }];
+
+    await fs.mkdir(athenaWorkspace, { recursive: true });
+    await fs.writeFile(path.join(athenaWorkspace, 'IDENTITY.md'), '# IDENTITY.md\n\n- Name: Athena\n');
+
+    const athenaDir = path.join(tmpDir, '.openclaw', 'agents', 'athena', 'sessions');
+    await fs.mkdir(athenaDir, { recursive: true });
+    await fs.writeFile(path.join(athenaDir, 'sessions.json'), JSON.stringify({
+      'agent:athena:subagent:child-1': { sessionId: '55555555-5555-5555-5555-555555555555', label: 'Child', updatedAt: 400 },
+      'agent:athena:ui:lesson-1': { sessionId: '66666666-6666-6666-6666-666666666666', label: 'Lesson', updatedAt: 350 },
+    }));
+
+    const app = await buildApp();
+    const res = await app.request('/api/sessions/inventory?limit=10');
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as { ok: boolean; sessions: Array<Record<string, unknown>> };
+    expect(json.ok).toBe(true);
+    expect(json.sessions.map((session) => session.sessionKey)).toEqual([
+      'agent:athena:main',
+      'agent:athena:subagent:child-1',
+      'agent:athena:ui:lesson-1',
+    ]);
+    expect(json.sessions[0]?.identityName).toBe('Athena');
   });
 
   it('serves omitted image bytes from a session transcript', async () => {

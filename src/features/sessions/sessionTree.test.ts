@@ -192,7 +192,7 @@ describe('buildAgentSidebarTree', () => {
     expect(flat.map((node) => node.key)).toEqual([]);
   });
 
-  it('surfaces orphan descendants with inferable agent roots when cleanup removed the root row', () => {
+  it('hides orphan descendants when their root agent row is missing', () => {
     const sessions = [
       session('agent:main:telegram:direct:123', { displayName: 'Telegram DM' }),
       session('agent:reviewer:subagent:abc123', { label: 'Worker' }),
@@ -201,9 +201,22 @@ describe('buildAgentSidebarTree', () => {
 
     const tree = buildAgentSidebarTree(sessions);
     const flat = flattenTree(tree, {});
+    expect(flat.map((node) => node.key)).toEqual([]);
+  });
+
+  it('keeps inferable descendants nested under a synthetic root when the persisted root row is missing', () => {
+    const sessions = [
+      session('agent:athena:main', { label: 'athena' }),
+      session('agent:athena:subagent:abc123', { label: 'Worker' }),
+      session('agent:athena:ui:lesson-1', { label: 'Lesson' }),
+    ];
+
+    const tree = buildAgentSidebarTree(sessions);
+    const flat = flattenTree(tree, {});
     expect(flat.map((node) => node.key)).toEqual([
-      'agent:main:telegram:direct:123',
-      'agent:reviewer:subagent:abc123',
+      'agent:athena:main',
+      'agent:athena:ui:lesson-1',
+      'agent:athena:subagent:abc123',
     ]);
   });
 
@@ -278,9 +291,10 @@ describe('buildAgentSidebarTree', () => {
     ]);
   });
 
-  it('nests direct and channel delivery sessions under their agent root', () => {
+  it('nests UI, direct, and channel delivery sessions under their agent root', () => {
     const sessions = [
       session('agent:reviewer:main', { label: 'Reviewer' }),
+      session('agent:reviewer:ui:roadmap-123', { label: 'Roadmap' }),
       session('agent:reviewer:telegram:direct:123', { displayName: 'Telegram DM' }),
       session('agent:reviewer:discord:channel:456', { displayName: 'Discord #general' }),
       session('agent:reviewer:subagent:abc123', { label: 'Worker' }),
@@ -292,6 +306,7 @@ describe('buildAgentSidebarTree', () => {
 
     const childKeys = tree[0].children.map((c) => c.key);
     expect(childKeys).toContain('agent:reviewer:subagent:abc123');
+    expect(childKeys).toContain('agent:reviewer:ui:roadmap-123');
     expect(childKeys).toContain('agent:reviewer:telegram:direct:123');
     expect(childKeys).toContain('agent:reviewer:discord:channel:456');
   });

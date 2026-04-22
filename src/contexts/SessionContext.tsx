@@ -67,7 +67,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const { soundEnabled } = useSettings();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(true);
-  const [currentSession, setCurrentSessionRaw] = useState('');
+  const [currentSession, setCurrentSessionRaw] = useState(() => {
+    try { return localStorage.getItem('openclaw:currentSession') || ''; } catch { return ''; }
+  });
   const [agentLogEntries, setAgentLogEntries] = useState<AgentLogEntry[]>([]);
   const [eventEntries, setEventEntries] = useState<EventEntry[]>([]);
   const [agentStatus, setAgentStatus] = useState<Record<string, GranularAgentState>>({});
@@ -121,6 +123,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     currentSessionRef.current = key;
     setCurrentSessionRaw(key);
     markSessionRead(key);
+    try { localStorage.setItem('openclaw:currentSession', key); } catch { /* ignore */ }
   }, [markSessionRead]);
 
   const fetchHiddenCronSessions = useCallback(async (activeMinutes: number, limit: number): Promise<Session[]> => {
@@ -130,6 +133,20 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         limit: String(limit),
       });
       const res = await fetch(`/api/sessions/hidden?${params.toString()}`);
+      if (!res.ok) return [];
+      const data = await res.json() as { ok?: boolean; sessions?: Session[] };
+      return Array.isArray(data.sessions) ? data.sessions : [];
+    } catch {
+      return [];
+    }
+  }, []);
+
+  const fetchPersistedSessions = useCallback(async (limit: number): Promise<Session[]> => {
+    try {
+      const params = new URLSearchParams({
+        limit: String(limit),
+      });
+      const res = await fetch(`/api/sessions/inventory?${params.toString()}`);
       if (!res.ok) return [];
       const data = await res.json() as { ok?: boolean; sessions?: Session[] };
       return Array.isArray(data.sessions) ? data.sessions : [];
@@ -184,7 +201,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         .map((session) => getSessionKey(session))
         .filter(isTopLevelAgentSessionKey)
         .map((sessionKey) => getRootAgentId(sessionKey))
-        .filter((rootId): rootId is string => Boolean(rootId) && rootId !== 'main'),
+        .filter((rootId): rootId is string => Boolean(rootId)),
     )).filter((rootId) => !rootIdentityNames[rootId] && !rootIdentityMisses[rootId]);
 
     if (rootAgentIds.length === 0) return;
@@ -249,8 +266,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     const rootId = getRootAgentId(sessionKey);
     if (!rootId) return session;
 
-    const identityName = rootId === 'main' ? agentName : rootIdentityNames[rootId];
-    if (rootId !== 'main' && !identityName) {
+    const identityName = rootIdentityNames[rootId] || (rootId === 'main' ? agentName : undefined);
+    if (!identityName) {
       if (!session.identityName) return session;
       const rest = { ...session };
       delete rest.identityName;
@@ -311,12 +328,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const listAuthoritativeSessions = useCallback(async () => {
     if (connectionState !== 'connected') return sessionsRef.current;
     try {
-      const [res, hiddenCronSessions] = await Promise.all([
+      const [res, hiddenCronSessions, persistedSessions] = await Promise.all([
         rpc('sessions.list', { limit: FULL_SESSIONS_LIMIT }) as Promise<SessionsListResponse>,
         fetchHiddenCronSessions(24 * 60, FULL_SESSIONS_LIMIT),
+        fetchPersistedSessions(FULL_SESSIONS_LIMIT),
       ]);
 
-      const baseSessions = mergeSessionLists(res?.sessions ?? [], hiddenCronSessions);
+      const baseSessions = mergeSessionLists(
+        mergeSessionLists(res?.sessions ?? [], persistedSessions),
+        hiddenCronSessions,
+      );
       const spawnedByRoots = new Set<string>([MAIN_SESSION_KEY]);
       for (const rootSession of getTopLevelAgentSessions(baseSessions)) {
         spawnedByRoots.add(getSessionKey(rootSession));
@@ -344,7 +365,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       console.debug('[SessionContext] Failed to fetch authoritative session list:', err);
       return sessionsRef.current;
     }
-  }, [connectionState, fetchHiddenCronSessions, mergeSessionLists, rpc]);
+  }, [connectionState, fetchHiddenCronSessions, fetchPersistedSessions, mergeSessionLists, rpc]);
 
   const setGranularStatus = useCallback((sessionKey: string, state: GranularAgentState) => {
     if (!sessionKey) return;

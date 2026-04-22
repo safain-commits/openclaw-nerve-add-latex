@@ -60,6 +60,11 @@ describe('sessionKeys', () => {
     expect(getRootAgentSessionKey('agent:varys:discord:channel:1488657713385701408')).toBe('agent:varys:main');
     expect(inferParentSessionKey('agent:varys:discord:channel:1488657713385701408')).toBe('agent:varys:main');
 
+    // UI chat sessions should also resolve back to their root agent
+    expect(getRootAgentId('agent:athena:ui:pengantar-sains-data-02e74709')).toBe('athena');
+    expect(getRootAgentSessionKey('agent:athena:ui:pengantar-sains-data-02e74709')).toBe('agent:athena:main');
+    expect(inferParentSessionKey('agent:athena:ui:pengantar-sains-data-02e74709')).toBe('agent:athena:main');
+
     // root sessions still return null parent
     expect(inferParentSessionKey('agent:main:main')).toBeNull();
     expect(inferParentSessionKey('agent:reviewer:main')).toBeNull();
@@ -99,6 +104,7 @@ describe('sessionKeys', () => {
     expect(getSessionDisplayLabel(session('agent:reviewer:main', { label: 'Reviewer' }), 'Nerve')).toBe('reviewer');
     expect(getSessionDisplayLabel(session('agent:reviewer:main', { identityName: 'Reviewer Prime' }), 'Nerve')).toBe('Reviewer Prime (reviewer)');
     expect(getSessionDisplayLabel(session('agent:reviewer:main'), 'Nerve')).toBe('reviewer');
+    expect(getSessionDisplayLabel(session('agent:main:main', { identityName: 'Ivy' }), 'Nerve')).toBe('Ivy (main)');
     expect(getSessionDisplayLabel(session('agent:main:main'), 'Nerve')).toBe('Nerve (main)');
   });
 

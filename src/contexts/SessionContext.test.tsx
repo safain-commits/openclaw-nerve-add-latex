@@ -92,6 +92,9 @@ describe('SessionContext', () => {
   });
 
   beforeEach(() => {
+    vi.spyOn(Storage.prototype, 'getItem').mockReturnValue(null);
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {});
+
     vi.clearAllMocks();
     subscribedHandler = null;
     soundEnabledValue = true;
@@ -141,6 +144,7 @@ describe('SessionContext', () => {
       if (url.includes('/api/server-info')) return Promise.resolve(jsonResponse({ agentName: 'Jen' }));
       if (url.includes('/api/agentlog')) return Promise.resolve(jsonResponse([]));
       if (url.includes('/api/sessions/hidden')) return Promise.resolve(jsonResponse({ ok: true, sessions: [] }));
+      if (url.includes('/api/sessions/inventory')) return Promise.resolve(jsonResponse({ ok: true, sessions: [] }));
       return Promise.resolve(jsonResponse({}));
     }) as typeof fetch;
   });
@@ -199,6 +203,7 @@ describe('SessionContext', () => {
       if (url.includes('/api/server-info')) return Promise.resolve(jsonResponse({ agentName: 'Jen' }));
       if (url.includes('/api/agentlog')) return Promise.resolve(jsonResponse([]));
       if (url.includes('/api/sessions/hidden')) return Promise.resolve(jsonResponse({ ok: true, sessions: [] }));
+      if (url.includes('/api/sessions/inventory')) return Promise.resolve(jsonResponse({ ok: true, sessions: [] }));
       return Promise.resolve(jsonResponse({}));
     }) as typeof fetch;
     globalThis.fetch = fetchSpy;
@@ -278,6 +283,7 @@ describe('SessionContext', () => {
       if (url.includes('/api/server-info')) return Promise.resolve(jsonResponse({ agentName: 'Jen' }));
       if (url.includes('/api/agentlog')) return Promise.resolve(jsonResponse([]));
       if (url.includes('/api/sessions/hidden')) return Promise.resolve(jsonResponse({ ok: true, sessions: [] }));
+      if (url.includes('/api/sessions/inventory')) return Promise.resolve(jsonResponse({ ok: true, sessions: [] }));
       return Promise.resolve(jsonResponse({}));
     }) as typeof fetch;
 
@@ -334,6 +340,7 @@ describe('SessionContext', () => {
       if (url.includes('/api/server-info')) return Promise.resolve(jsonResponse({ agentName: 'Jen' }));
       if (url.includes('/api/agentlog')) return Promise.resolve(jsonResponse([]));
       if (url.includes('/api/sessions/hidden')) return Promise.resolve(jsonResponse({ ok: true, sessions: [] }));
+      if (url.includes('/api/sessions/inventory')) return Promise.resolve(jsonResponse({ ok: true, sessions: [] }));
       return Promise.resolve(jsonResponse({}));
     }) as typeof fetch;
     globalThis.fetch = fetchSpy;
@@ -485,6 +492,7 @@ describe('SessionContext', () => {
       }
       if (url.includes('/api/agentlog')) return Promise.resolve(jsonResponse([]));
       if (url.includes('/api/sessions/hidden')) return Promise.resolve(jsonResponse({ ok: true, sessions: [] }));
+      if (url.includes('/api/sessions/inventory')) return Promise.resolve(jsonResponse({ ok: true, sessions: [] }));
       return Promise.resolve(jsonResponse({}));
     }) as typeof fetch;
 
@@ -504,6 +512,56 @@ describe('SessionContext', () => {
         workspace: '/managed/workspaces/managed',
       }));
     });
+  });
+
+  it('merges persisted session inventory so older root agent chats stay visible when gateway sessions are sparse', async () => {
+    rpcMock.mockImplementation(async (method: string, params?: Record<string, unknown>) => {
+      if (method === 'sessions.list') {
+        if (params && Object.prototype.hasOwnProperty.call(params, 'spawnedBy')) {
+          return { sessions: [] };
+        }
+        return {
+          sessions: [
+            { sessionKey: 'agent:main:main', label: 'Main' },
+          ],
+        };
+      }
+      return {};
+    });
+
+    globalThis.fetch = vi.fn((input: string | URL | Request) => {
+      const url = typeof input === 'string'
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : input.url;
+
+      if (url.includes('/api/server-info')) return Promise.resolve(jsonResponse({ agentName: 'Jen' }));
+      if (url.includes('/api/agentlog')) return Promise.resolve(jsonResponse([]));
+      if (url.includes('/api/sessions/hidden')) return Promise.resolve(jsonResponse({ ok: true, sessions: [] }));
+      if (url.includes('/api/sessions/inventory')) {
+        return Promise.resolve(jsonResponse({
+          ok: true,
+          sessions: [
+            { sessionKey: 'agent:main:main', label: 'Main' },
+            { sessionKey: 'agent:designer:main', label: 'Designer', updatedAt: 1774099479671 },
+          ],
+        }));
+      }
+      return Promise.resolve(jsonResponse({}));
+    }) as typeof fetch;
+
+    render(
+      <SessionProvider>
+        <SessionLabels />
+      </SessionProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Designer')).toBeInTheDocument();
+    });
+
+    expect(rpcMock).toHaveBeenCalledWith('sessions.list', { limit: 1000 });
   });
 
   it('uses the full gateway session list for sidebar refreshes so older agent chats stay visible', async () => {
@@ -547,6 +605,7 @@ describe('SessionContext', () => {
       }
       if (url.includes('/api/agentlog')) return Promise.resolve(jsonResponse([]));
       if (url.includes('/api/sessions/hidden')) return Promise.resolve(jsonResponse({ ok: true, sessions: [] }));
+      if (url.includes('/api/sessions/inventory')) return Promise.resolve(jsonResponse({ ok: true, sessions: [] }));
       return Promise.resolve(jsonResponse({}));
     }) as typeof fetch;
 
@@ -589,6 +648,7 @@ describe('SessionContext', () => {
       }
       if (url.includes('/api/agentlog')) return Promise.resolve(jsonResponse([]));
       if (url.includes('/api/sessions/hidden')) return Promise.resolve(jsonResponse({ ok: true, sessions: [] }));
+      if (url.includes('/api/sessions/inventory')) return Promise.resolve(jsonResponse({ ok: true, sessions: [] }));
       return Promise.resolve(jsonResponse({}));
     }) as typeof fetch;
 
@@ -632,6 +692,7 @@ describe('SessionContext', () => {
       }
       if (url.includes('/api/agentlog')) return Promise.resolve(jsonResponse([]));
       if (url.includes('/api/sessions/hidden')) return Promise.resolve(jsonResponse({ ok: true, sessions: [] }));
+      if (url.includes('/api/sessions/inventory')) return Promise.resolve(jsonResponse({ ok: true, sessions: [] }));
       return Promise.resolve(jsonResponse({}));
     }) as typeof fetch;
     globalThis.fetch = fetchSpy;
